@@ -1,0 +1,84 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint & Typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+
+  test:
+    name: Test (Node ${{ matrix.node }}, ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        node: [22]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - run: npm test
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Smoke test bundle
+        run: node dist/pocket-videolib.js --version
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pocket-videolib
+          path: dist/pocket-videolib.js
+          if-no-files-found: error
+
+  # 产物只依赖 Node 内置模块，验证在最低支持版本上可以运行
+  compat:
+    name: Runtime compat (Node ${{ matrix.node }})
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: [18, 20, 24]
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: pocket-videolib
+      - name: Start server and request API
+        shell: bash
+        run: |
+          mkdir media && echo hello > media/a.mp4
+          node pocket-videolib.js media --port 18080 --host 127.0.0.1 &
+          for i in $(seq 1 20); do curl -sf http://127.0.0.1:18080/api/info && break; sleep 0.5; done
+          curl -sf "http://127.0.0.1:18080/api/list" | grep -q a.mp4
+          curl -sf -H "Range: bytes=0-1" -o /dev/null -w "%{http_code}" http://127.0.0.1:18080/media/a.mp4 | grep -q 206

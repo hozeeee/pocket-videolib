@@ -1,0 +1,64 @@
+{
+  "name": "pocket-videolib",
+  "type": "module",
+  "version": "0.1.0",
+  "description": "A zero-dependency, single-file local media library server. Browse and stream your local videos from any device, with client-side chunk caching.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hozeeee/pocket-videolib.git"
+  },
+  "keywords": [
+    "media",
+    "video",
+    "server",
+    "stream",
+    "cli"
+  ],
+  "bin": {
+    "pocket-videolib": "dist/pocket-videolib.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=18.17"
+  },
+  "workspaces": [
+    "web"
+  ],
+  "scripts": {
+    "dev": "run-p dev:server dev:web",
+    "dev:server": "tsx watch src/index.ts --port 8080 --dir .",
+    "dev:web": "npm run dev -w web",
+    "build": "run-s build:web build:server",
+    "build:web": "npm run build -w web",
+    "build:server": "tsup",
+    "start": "node dist/pocket-videolib.js",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "typecheck": "tsc --noEmit && npm run typecheck -w web",
+    "test": "vitest run",
+    "prepublishOnly": "npm run build",
+    "prepare": "simple-git-hooks"
+  },
+  "devDependencies": {
+    "@antfu/eslint-config": "^9.5.1",
+    "@types/node": "^26.6.5",
+    "eslint": "^10.12.0",
+    "eslint-plugin-format": "^2.0.1",
+    "lint-staged": "^17.6.0",
+    "npm-run-all2": "^9.0.3",
+    "simple-git-hooks": "^2.14.0",
+    "tsup": "^8.5.1",
+    "tsx": "^4.23.15",
+    "typescript": "^6.0.3",
+    "vitest": "^5.0.3"
+  },
+  "simple-git-hooks": {
+    "pre-commit": "npx lint-staged"
+  },
+  "lint-staged": {
+    "*": "eslint --fix"
+  }
+}
