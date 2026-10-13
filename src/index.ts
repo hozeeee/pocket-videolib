@@ -21,9 +21,9 @@ async function main(): Promise<void> {
   logger.verbose = config.verbose
 
   const server = createServer(config)
-  const port = await listen(server, config.port, config.host)
+  const { address, port } = await listen(server, config.port, config.host)
 
-  const urls = getAccessUrls(config.host, port, config.https ? 'https' : 'http')
+  const urls = getAccessUrls(address, port, config.https ? 'https' : 'http')
   console.log()
   console.log(`  ${color.bold(color.cyan(APP_NAME))} ${color.dim(`v${APP_VERSION}`)}`)
   console.log()
@@ -54,6 +54,9 @@ main().catch((error: unknown) => {
   }
   else if ((error as NodeJS.ErrnoException).code === 'EADDRINUSE') {
     console.error(`${color.red('Error:')} Port is already in use. Try another one with --port.`)
+  }
+  else if (['EADDRNOTAVAIL', 'EAFNOSUPPORT'].includes((error as NodeJS.ErrnoException).code ?? '')) {
+    console.error(`${color.red('Error:')} Cannot bind to this address (IPv6 may be disabled). Check --host.`)
   }
   else {
     console.error(error)

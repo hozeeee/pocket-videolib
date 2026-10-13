@@ -1,4 +1,5 @@
 import type { Server } from 'node:http'
+import type { AddressInfo } from 'node:net'
 import type { AppConfig } from './config'
 import { createServer as createHttpServer } from 'node:http'
 import { createServer as createHttpsServer } from 'node:https'
@@ -16,15 +17,17 @@ export function createServer(config: AppConfig): Server {
   return server
 }
 
-/** 启动监听，返回实际监听的端口（port 为 0 时由系统分配） */
-export function listen(server: Server, port: number, host: string): Promise<number> {
+/**
+ * 启动监听，返回实际监听的地址与端口（port 为 0 时由系统分配）。
+ * 不传 host 时 Node 会优先监听 `::`（IPv4/IPv6 双栈），系统不支持 IPv6 时回退到 `0.0.0.0`。
+ */
+export function listen(server: Server, port: number, host?: string): Promise<AddressInfo> {
   return new Promise((resolve, reject) => {
     const onError = (error: Error): void => reject(error)
     server.once('error', onError)
     server.listen(port, host, () => {
       server.off('error', onError)
-      const address = server.address()
-      resolve(typeof address === 'object' && address ? address.port : port)
+      resolve(server.address() as AddressInfo)
     })
   })
 }

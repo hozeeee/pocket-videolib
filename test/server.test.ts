@@ -3,7 +3,7 @@ import type { ListResponse } from '../shared/api'
 import type { AppConfig } from '../src/config'
 import { Buffer } from 'node:buffer'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { networkInterfaces, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createServer, listen } from '../src/server'
@@ -146,6 +146,40 @@ describe('basic auth', () => {
         headers: { Authorization: `Basic ${Buffer.from('admin:secret').toString('base64')}` },
       })
       expect(allowed.status).toBe(200)
+    }
+    finally {
+      server.close()
+    }
+  })
+})
+
+const hasIPv6Loopback = Object.values(networkInterfaces())
+  .some(list => list?.some(item => item.family === 'IPv6' && item.address === '::1'))
+
+describe.skipIf(!hasIPv6Loopback)('ipv6', () => {
+  const config = (host?: string): AppConfig =>
+    ({ root, port: 0, host, showHidden: false, followSymlinks: false, verbose: false })
+
+  it('serves over an IPv6 address', async () => {
+    const server = createServer(config('::1'))
+    try {
+      const { address, port } = await listen(server, 0, '::1')
+      expect(address).toBe('::1')
+      const res = await fetch(`http://[::1]:${port}/api/info`)
+      expect(res.status).toBe(200)
+    }
+    finally {
+      server.close()
+    }
+  })
+
+  it('listens on IPv4 and IPv6 by default', async () => {
+    const server = createServer(config())
+    try {
+      const { address, port } = await listen(server, 0)
+      expect(address).toBe('::')
+      expect((await fetch(`http://[::1]:${port}/api/info`)).status).toBe(200)
+      expect((await fetch(`http://127.0.0.1:${port}/api/info`)).status).toBe(200)
     }
     finally {
       server.close()

@@ -8,7 +8,8 @@ export interface AppConfig {
   /** 媒体根目录的绝对真实路径 */
   root: string
   port: number
-  host: string
+  /** 未指定时由 Node 监听所有地址：支持 IPv6 时为 `::`（IPv4/IPv6 双栈），否则为 `0.0.0.0` */
+  host?: string
   auth?: Credentials
   https?: {
     cert: Buffer
@@ -39,7 +40,6 @@ export class ConfigError extends Error {
 }
 
 export const DEFAULT_PORT = 8080
-export const DEFAULT_HOST = '0.0.0.0'
 
 function parsePort(value: string | undefined): number {
   if (value === undefined)
@@ -48,6 +48,11 @@ function parsePort(value: string | undefined): number {
   if (!Number.isInteger(port) || port < 0 || port > 65535)
     throw new ConfigError(`Invalid port: ${value}`)
   return port
+}
+
+/** 兼容 URL 风格的 `[::1]` 写法 */
+function parseHost(value: string | undefined): string | undefined {
+  return value?.replace(/^\[(.*)\]$/, '$1') || undefined
 }
 
 function resolveRoot(dir: string | undefined): string {
@@ -86,7 +91,7 @@ export function resolveConfig(options: RawOptions): AppConfig {
   return {
     root: resolveRoot(options.dir),
     port: parsePort(options.port),
-    host: options.host ?? DEFAULT_HOST,
+    host: parseHost(options.host),
     auth,
     https: options.cert && options.key
       ? { cert: readFileOption('cert', options.cert), key: readFileOption('key', options.key) }

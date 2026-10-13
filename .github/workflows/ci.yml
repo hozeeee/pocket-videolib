@@ -78,7 +78,9 @@ jobs:
         shell: bash
         run: |
           mkdir media && echo hello > media/a.mp4
-          node pocket-videolib.js media --port 18080 --host 127.0.0.1 &
+          node pocket-videolib.js media --port 18080 &
           for i in $(seq 1 20); do curl -sf http://127.0.0.1:18080/api/info && break; sleep 0.5; done
           curl -sf "http://127.0.0.1:18080/api/list" | grep -q a.mp4
           curl -sf -H "Range: bytes=0-1" -o /dev/null -w "%{http_code}" http://127.0.0.1:18080/media/a.mp4 | grep -q 206
+          # 默认双栈监听，IPv6 同样可用
+          curl -sfg "http://[::1]:18080/api/info"
