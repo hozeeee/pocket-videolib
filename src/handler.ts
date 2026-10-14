@@ -7,6 +7,7 @@ import { handleIndex, handleServiceWorker } from './routes/static'
 import { verifyBasicAuth } from './utils/auth'
 import { HttpError, sendError, setCommonHeaders } from './utils/http'
 import { logger } from './utils/logger'
+import { RateLimiter } from './utils/throttle'
 
 type RequestHandler = (req: Request, res: Response) => void
 
@@ -19,7 +20,7 @@ function decodePath(pathname: string): string {
   }
 }
 
-async function route(req: Request, res: Response, config: AppConfig): Promise<void> {
+async function route(req: Request, res: Response, config: AppConfig, limiter?: RateLimiter): Promise<void> {
   const url = new URL(req.url ?? '/', 'http://localhost')
   const pathname = url.pathname
 
@@ -31,7 +32,7 @@ async function route(req: Request, res: Response, config: AppConfig): Promise<vo
     throw new HttpError(404, 'Not found')
 
   if (pathname.startsWith(MEDIA_PREFIX))
-    return handleMedia(req, res, config, decodePath(pathname.slice(MEDIA_PREFIX.length)), url.searchParams)
+    return handleMedia(req, res, config, decodePath(pathname.slice(MEDIA_PREFIX.length)), url.searchParams, limiter)
 
   if (pathname === '/sw.js')
     return handleServiceWorker(req, res)
@@ -40,6 +41,8 @@ async function route(req: Request, res: Response, config: AppConfig): Promise<vo
 }
 
 export function createHandler(config: AppConfig): RequestHandler {
+  // 同一服务的所有连接共享一个限速器，限制的是总带宽
+  const limiter = config.limitRate ? new RateLimiter(config.limitRate) : undefined
   return (req, res) => {
     const startedAt = Date.now()
     res.on('finish', () => logger.access(req.method ?? '-', req.url ?? '-', res.statusCode, Date.now() - startedAt))
@@ -58,7 +61,7 @@ export function createHandler(config: AppConfig): RequestHandler {
       return
     }
 
-    route(req, res, config).catch((error: unknown) => {
+    route(req, res, config, limiter).catch((error: unknown) => {
       if (error instanceof HttpError) {
         sendError(req, res, error.status, error.message)
         return

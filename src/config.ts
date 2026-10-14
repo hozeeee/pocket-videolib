@@ -3,6 +3,7 @@ import { existsSync, readFileSync, statSync } from 'node:fs'
 import { basename, resolve } from 'node:path'
 import process from 'node:process'
 import { parseCredentials } from './utils/auth'
+import { MIN_RATE, parseRate } from './utils/throttle'
 
 export interface AppConfig {
   /** 媒体根目录的绝对真实路径 */
@@ -15,6 +16,8 @@ export interface AppConfig {
     cert: Buffer
     key: Buffer
   }
+  /** 媒体文件传输的总上行限速（字节/秒），所有连接共享；未设置时不限速 */
+  limitRate?: number
   showHidden: boolean
   followSymlinks: boolean
   verbose: boolean
@@ -27,6 +30,7 @@ export interface RawOptions {
   auth?: string
   cert?: string
   key?: string
+  limitRate?: string
   showHidden?: boolean
   followSymlinks?: boolean
   verbose?: boolean
@@ -53,6 +57,20 @@ function parsePort(value: string | undefined): number {
 /** 兼容 URL 风格的 `[::1]` 写法 */
 function parseHost(value: string | undefined): string | undefined {
   return value?.replace(/^\[(.*)\]$/, '$1') || undefined
+}
+
+/** `0` 表示不限速 */
+function parseLimitRate(value: string | undefined): number | undefined {
+  if (value === undefined)
+    return undefined
+  const rate = parseRate(value)
+  if (rate === undefined)
+    throw new ConfigError(`Invalid rate: ${value} (examples: 2M, 500K, 20Mbps)`)
+  if (rate === 0)
+    return undefined
+  if (rate < MIN_RATE)
+    throw new ConfigError(`Rate is too low: ${value} (minimum: 1K)`)
+  return rate
 }
 
 function resolveRoot(dir: string | undefined): string {
@@ -96,6 +114,7 @@ export function resolveConfig(options: RawOptions): AppConfig {
     https: options.cert && options.key
       ? { cert: readFileOption('cert', options.cert), key: readFileOption('key', options.key) }
       : undefined,
+    limitRate: parseLimitRate(options.limitRate),
     showHidden: options.showHidden ?? false,
     followSymlinks: options.followSymlinks ?? false,
     verbose: options.verbose ?? false,

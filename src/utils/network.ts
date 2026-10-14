@@ -25,6 +25,13 @@ export function getLanAddresses(families: Family[], interfaces: Interfaces = net
   return result
 }
 
+/** 获取拥有可访问地址的网卡名称，筛选规则与 {@link getLanAddresses} 一致 */
+export function getLanInterfaceNames(interfaces: Interfaces = networkInterfaces()): string[] {
+  return Object.entries(interfaces)
+    .filter(([, list]) => list?.some(item => !item.internal && !(item.family === 'IPv6' && isLinkLocal(item.address))))
+    .map(([name]) => name)
+}
+
 /** IPv6 地址在 URL 中需要用方括号包裹 */
 export function formatUrlHost(host: string): string {
   return isIPv6(host) ? `[${host}]` : host

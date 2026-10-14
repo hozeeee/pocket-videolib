@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { parseCli } from '../src/cli'
 import { resolveConfig } from '../src/config'
 import { parseCredentials, verifyBasicAuth } from '../src/utils/auth'
-import { formatUrlHost, getAccessUrls } from '../src/utils/network'
+import { formatUrlHost, getAccessUrls, getLanInterfaceNames } from '../src/utils/network'
 import { srtToVtt } from '../src/utils/subtitle'
 
 describe('parseCli', () => {
@@ -95,5 +95,10 @@ describe('host & access urls', () => {
 
   it('uses the bound address directly otherwise', () => {
     expect(getAccessUrls('::1', 3000, 'http', interfaces)).toEqual(['http://[::1]:3000'])
+  })
+
+  it('lists interfaces with reachable addresses only', () => {
+    const withVeth = { ...interfaces, veth0: [iface('fe80::2', 'IPv6')] } as ReturnType<typeof networkInterfaces>
+    expect(getLanInterfaceNames(withVeth)).toEqual(['eth0'])
   })
 })

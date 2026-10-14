@@ -1,6 +1,7 @@
 import type { Stats } from 'node:fs'
 import type { AppConfig } from '../config'
 import type { Request, Response } from '../utils/http'
+import type { RateLimiter } from '../utils/throttle'
 import { createReadStream } from 'node:fs'
 import { readFile, stat } from 'node:fs/promises'
 import { basename } from 'node:path'
@@ -10,6 +11,7 @@ import { getMediaType } from '../utils/media'
 import { resolveSafePath } from '../utils/path'
 import { parseRange } from '../utils/range'
 import { srtToVtt } from '../utils/subtitle'
+import { ThrottleStream } from '../utils/throttle'
 
 function createEtag(s: Stats): string {
   // 强校验 ETag：If-Range 要求强比较
@@ -52,7 +54,7 @@ async function sendSubtitleAsVtt(req: Request, res: Response, absolute: string):
   sendText(req, res, 200, vtt, 'text/vtt; charset=utf-8', { 'Cache-Control': 'no-cache' })
 }
 
-export async function handleMedia(req: Request, res: Response, config: AppConfig, relativePath: string, query: URLSearchParams): Promise<void> {
+export async function handleMedia(req: Request, res: Response, config: AppConfig, relativePath: string, query: URLSearchParams, limiter?: RateLimiter): Promise<void> {
   const absolute = await resolveSafePath(config.root, relativePath, config.followSymlinks)
   const info = await stat(absolute)
   if (!info.isFile())
@@ -108,7 +110,11 @@ export async function handleMedia(req: Request, res: Response, config: AppConfig
   }
 
   try {
-    await pipeline(createReadStream(absolute, { start, end }), res)
+    const source = createReadStream(absolute, { start, end })
+    if (limiter)
+      await pipeline(source, new ThrottleStream(limiter), res)
+    else
+      await pipeline(source, res)
   }
   catch (error) {
     // 客户端中途断开（如拖动进度条）属于正常情况

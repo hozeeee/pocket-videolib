@@ -153,6 +153,22 @@ describe('basic auth', () => {
   })
 })
 
+describe('upload rate limit', () => {
+  it('throttles media streaming but keeps content intact', async () => {
+    const { server, base } = await startServer({ limitRate: 2000 })
+    try {
+      const startedAt = Date.now()
+      const res = await fetch(`${base}/media/${encodeURIComponent('剧集')}/${encodeURIComponent('第 1 集.mp4')}`)
+      expect(Buffer.from(await res.arrayBuffer())).toEqual(VIDEO)
+      // 1000 字节减去 200 字节突发，按 2000 B/s 约需 400ms
+      expect(Date.now() - startedAt).toBeGreaterThanOrEqual(300)
+    }
+    finally {
+      server.close()
+    }
+  })
+})
+
 const hasIPv6Loopback = Object.values(networkInterfaces())
   .some(list => list?.some(item => item.family === 'IPv6' && item.address === '::1'))
 
