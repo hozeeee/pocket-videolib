@@ -1,5 +1,11 @@
+import type { Stats } from 'node:fs'
 import type { MediaKind } from '../../shared/api'
 import { extname } from 'node:path'
+
+/** 文件版本标识，同时用作强校验 ETag（If-Range 要求强比较） */
+export function createEtag(s: Stats): string {
+  return `"${s.size.toString(16)}-${Math.floor(s.mtimeMs).toString(16)}"`
+}
 
 interface MediaType {
   kind: MediaKind

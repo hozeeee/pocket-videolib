@@ -3,6 +3,7 @@ import process from 'node:process'
 import { HELP_TEXT, parseCli } from './cli'
 import { ConfigError, resolveConfig } from './config'
 import { createServer, listen } from './server'
+import { Transcoder } from './transcode'
 import { detectLinkSpeeds } from './utils/link-speed'
 import { color, logger } from './utils/logger'
 import { getAccessUrls, getLanInterfaceNames } from './utils/network'
@@ -24,6 +25,19 @@ function printBandwidth(limitRate: number | undefined, speeds: LinkSpeed[]): voi
   console.log(`  ${color.dim('Limit:  ')} ${formatRate(limitRate)}${exceeds ? color.yellow(' ≥ link speed, has no effect') : ''}`)
 }
 
+async function printTranscode(transcoder: Transcoder | undefined): Promise<void> {
+  const label = color.dim('Quality:')
+  if (!transcoder) {
+    console.log(`  ${label} original only ${color.dim('(transcoding disabled)')}`)
+    return
+  }
+  const status = await transcoder.getStatus()
+  if (status.available)
+    console.log(`  ${label} original + up to 1080p HLS ${color.dim(`(ffmpeg ${status.version})`)}`)
+  else
+    console.log(`  ${label} original only ${color.yellow(`(${status.reason}; install ffmpeg or use --ffmpeg to enable quality levels)`)}`)
+}
+
 async function main(): Promise<void> {
   const cli = parseCli(process.argv.slice(2))
   if (cli.type === 'help') {
@@ -38,9 +52,11 @@ async function main(): Promise<void> {
   const config = resolveConfig(cli.options)
   logger.verbose = config.verbose
 
-  const server = createServer(config)
+  const transcoder = config.transcode ? new Transcoder(config.transcode) : undefined
+  const server = createServer(config, transcoder)
   // 与启动监听并行，尽量不拖慢启动
   const linkSpeeds = detectLinkSpeeds(getLanInterfaceNames())
+  void transcoder?.getStatus()
   const { address, port } = await listen(server, config.port, config.host)
 
   const urls = getAccessUrls(address, port, config.https ? 'https' : 'http')
@@ -51,6 +67,7 @@ async function main(): Promise<void> {
   for (const url of urls)
     console.log(`  ${color.dim('Open:   ')} ${color.green(url)}`)
   printBandwidth(config.limitRate, await linkSpeeds)
+  await printTranscode(transcoder)
   if (config.auth)
     console.log(`  ${color.dim('Auth:   ')} enabled (user: ${config.auth.username})`)
   if (!config.https)

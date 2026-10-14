@@ -1,4 +1,3 @@
-import type { Stats } from 'node:fs'
 import type { AppConfig } from '../config'
 import type { Request, Response } from '../utils/http'
 import type { RateLimiter } from '../utils/throttle'
@@ -7,18 +6,13 @@ import { readFile, stat } from 'node:fs/promises'
 import { basename } from 'node:path'
 import { pipeline } from 'node:stream/promises'
 import { HttpError, sendText } from '../utils/http'
-import { getMediaType } from '../utils/media'
+import { createEtag, getMediaType } from '../utils/media'
 import { resolveSafePath } from '../utils/path'
 import { parseRange } from '../utils/range'
 import { srtToVtt } from '../utils/subtitle'
 import { ThrottleStream } from '../utils/throttle'
 
-function createEtag(s: Stats): string {
-  // 强校验 ETag：If-Range 要求强比较
-  return `"${s.size.toString(16)}-${Math.floor(s.mtimeMs).toString(16)}"`
-}
-
-function isNotModified(req: Request, etag: string, mtime: Date): boolean {
+export function isNotModified(req: Request, etag: string, mtime: Date): boolean {
   const ifNoneMatch = req.headers['if-none-match']
   if (ifNoneMatch)
     return ifNoneMatch.split(',').some(tag => tag.trim() === etag)
@@ -109,6 +103,11 @@ export async function handleMedia(req: Request, res: Response, config: AppConfig
     return
   }
 
+  await streamFile(res, absolute, start, end, limiter)
+}
+
+/** 发送文件的 [start, end] 字节，客户端中途断开不视为错误 */
+export async function streamFile(res: Response, absolute: string, start: number, end: number, limiter?: RateLimiter): Promise<void> {
   try {
     const source = createReadStream(absolute, { start, end })
     if (limiter)

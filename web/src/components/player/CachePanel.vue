@@ -7,9 +7,14 @@ import CacheProgressBar from './CacheProgressBar.vue'
 
 const props = defineProps<{
   task?: DownloadTask
+  /** 尚未开始缓存时显示的大小（转码清晰度为预估值） */
   size: number
+  /** 当前缓存的清晰度 */
+  qualityLabel?: string
+  /** 当前为转码清晰度 */
+  transcoded: boolean
   playhead?: number
-  /** Service Worker 是否已接管（可边缓存边播放） */
+  /** 能否边缓存边播放（已缓存的部分从本地读取） */
   streaming: boolean
   /** 当前是否正在播放本地缓存 */
   fromLocal: boolean
@@ -34,10 +39,14 @@ const STATUS_TEXT: Record<TaskStatus, string> = {
 
 const status = computed<TaskStatus>(() => props.task?.status ?? 'idle')
 const progress = computed(() => props.task && props.task.chunkCount > 0 ? props.task.cachedChunks / props.task.chunkCount : 0)
-const cachedBytes = computed(() => Math.min(progress.value * props.size, props.size))
+const isHls = computed(() => props.task ? props.task.type === 'hls' : props.transcoded)
+const total = computed(() => props.task?.size || props.size)
+const cachedBytes = computed(() => props.task?.cachedBytes ?? 0)
+/** 转码后的大小在缓存完成前只是预估 */
+const approximate = computed(() => isHls.value && status.value !== 'done')
 const eta = computed(() => {
   const speed = props.task?.speed ?? 0
-  return speed > 0 ? (props.size - cachedBytes.value) / speed : Number.NaN
+  return speed > 0 ? Math.max(0, total.value - cachedBytes.value) / speed : Number.NaN
 })
 const running = computed(() => status.value === 'downloading' || status.value === 'queued')
 
@@ -45,8 +54,10 @@ const modeHint = computed(() => {
   if (props.fromLocal)
     return '正在播放本地缓存，不消耗服务器带宽'
   if (props.streaming)
-    return '已缓存的部分将直接从本地读取，可先缓存一段再观看'
-  return '当前连接不支持边缓存边播放（需 HTTPS 或 localhost），缓存完成后会自动切换为本地播放'
+    return '已缓存的部分直接从本地读取；开始缓存后，播放过的内容也会一并保存，播放缓冲不足时缓存会自动让路'
+  if (isHls.value)
+    return '当前浏览器播放转码清晰度时无法读取本地缓存（需 HTTPS 或 localhost）'
+  return '当前连接不支持边缓存边播放原画（需 HTTPS 或 localhost），缓存完成后会自动切换为本地播放；也可以选择转码清晰度边看边缓存'
 })
 </script>
 
@@ -56,6 +67,7 @@ const modeHint = computed(() => {
       <div class="title">
         <AppIcon name="cache" :size="16" />
         <span>离线缓存</span>
+        <span v-if="qualityLabel" class="quality">{{ qualityLabel }}</span>
         <span class="status" :class="`status--${status}`">{{ STATUS_TEXT[status] }}</span>
       </div>
       <div class="actions">
@@ -74,7 +86,7 @@ const modeHint = computed(() => {
     <CacheProgressBar v-if="task" :bitmap="task.bitmap" :version="task.version" :playhead="playhead" />
 
     <div class="stats muted">
-      <span>{{ formatPercent(progress) }} · {{ formatBytes(cachedBytes) }} / {{ formatBytes(size) }}</span>
+      <span>{{ formatPercent(progress) }} · {{ formatBytes(cachedBytes) }} / {{ approximate ? '约 ' : '' }}{{ formatBytes(total) }}</span>
       <span v-if="status === 'downloading'">{{ formatSpeed(task?.speed ?? 0) }} · 剩余 {{ formatDuration(eta) }}</span>
     </div>
 
@@ -87,7 +99,7 @@ const modeHint = computed(() => {
 
     <label class="auto">
       <input v-model="autoCache" type="checkbox">
-      <span>打开视频时自动缓存（从当前播放位置开始）</span>
+      <span>打开视频时自动缓存当前清晰度（从播放位置开始）</span>
     </label>
   </div>
 </template>
@@ -119,6 +131,15 @@ const modeHint = computed(() => {
   padding: 1px 8px;
   border-radius: 9px;
   background: var(--bg-hover);
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.quality {
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
   color: var(--text-muted);
   font-size: 12px;
   font-weight: 400;

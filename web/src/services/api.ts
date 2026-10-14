@@ -1,5 +1,5 @@
-import type { ErrorResponse, ListResponse, ServerInfo } from '@shared/api'
-import { API_PREFIX, toMediaUrl } from '@shared/api'
+import type { ErrorResponse, ListResponse, MediaInfo, ServerInfo } from '@shared/api'
+import { API_PREFIX, toHlsPlaylistUrl, toMediaUrl } from '@shared/api'
 
 export class ApiError extends Error {
   constructor(public readonly status: number, message: string) {
@@ -25,12 +25,21 @@ export function fetchDirectory(path: string, signal?: AbortSignal): Promise<List
   return request<ListResponse>(`/list?path=${encodeURIComponent(path)}`, signal)
 }
 
+export function fetchMediaInfo(path: string, signal?: AbortSignal): Promise<MediaInfo> {
+  return request<MediaInfo>(`/media-info?path=${encodeURIComponent(path)}`, signal)
+}
+
 /**
  * 媒体文件的 URL pathname，同时作为缓存主键。
  * 经过 URL 解析以保证与 Service Worker 中 `new URL(request.url).pathname` 一致。
  */
 export function getMediaKey(path: string): string {
   return new URL(toMediaUrl(path), location.origin).pathname
+}
+
+/** 某个清晰度的播放列表 pathname，同时作为该清晰度的缓存主键 */
+export function getHlsKey(path: string, level: string): string {
+  return new URL(toHlsPlaylistUrl(path, level), location.origin).pathname
 }
 
 export function getSubtitleUrl(path: string): string {

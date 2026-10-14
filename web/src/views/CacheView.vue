@@ -21,10 +21,10 @@ onMounted(async () => {
 const tasks = computed(() => [...downloadManager.tasks.values()]
   .filter(t => t.cachedChunks > 0 || t.status !== 'idle'))
 
-const cachedBytes = computed(() => tasks.value.reduce((sum, t) => sum + (t.chunkCount ? (t.cachedChunks / t.chunkCount) * t.size : 0), 0))
+const cachedBytes = computed(() => tasks.value.reduce((sum, t) => sum + t.cachedBytes, 0))
 
 async function remove(task: DownloadTask): Promise<void> {
-  await downloadManager.remove(task.path)
+  await downloadManager.remove(task.key)
   await refresh()
 }
 
@@ -61,15 +61,15 @@ async function removeAll(): Promise<void> {
       v-else-if="tasks.length === 0"
       icon="cache"
       title="还没有缓存任何视频"
-      description="在播放页点击「开始缓存」，即可把视频分片保存到本地，网络不佳时也能流畅观看"
+      description="在播放页点击「开始缓存」，即可把当前清晰度的视频保存到本地，网络不佳时也能流畅观看"
     />
     <ul v-else class="list">
       <CachedFileItem
         v-for="task in tasks"
         :key="task.key"
         :task="task"
-        @start="downloadManager.start(task.path, task.size)"
-        @pause="downloadManager.pause(task.path)"
+        @start="downloadManager.resume(task.key)"
+        @pause="downloadManager.pause(task.key)"
         @remove="remove(task)"
       />
     </ul>

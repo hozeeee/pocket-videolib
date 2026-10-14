@@ -10,6 +10,7 @@
     "typecheck": "vue-tsc --noEmit -p tsconfig.json && vue-tsc --noEmit -p tsconfig.sw.json"
   },
   "dependencies": {
+    "hls.js": "^1.7.3",
     "idb": "^8.0.4",
     "vue": "^3.5.43",
     "vue-router": "^5.4.0"

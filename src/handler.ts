@@ -1,6 +1,8 @@
 import type { AppConfig } from './config'
+import type { Transcoder } from './transcode'
 import type { Request, Response } from './utils/http'
-import { API_PREFIX, MEDIA_PREFIX } from '../shared/api'
+import { API_PREFIX, HLS_PREFIX, MEDIA_PREFIX } from '../shared/api'
+import { handleHls, handleMediaInfo } from './routes/hls'
 import { handleInfo, handleList } from './routes/list'
 import { handleMedia } from './routes/media'
 import { handleIndex, handleServiceWorker } from './routes/static'
@@ -20,7 +22,7 @@ function decodePath(pathname: string): string {
   }
 }
 
-async function route(req: Request, res: Response, config: AppConfig, limiter?: RateLimiter): Promise<void> {
+async function route(req: Request, res: Response, config: AppConfig, limiter?: RateLimiter, transcoder?: Transcoder): Promise<void> {
   const url = new URL(req.url ?? '/', 'http://localhost')
   const pathname = url.pathname
 
@@ -28,11 +30,15 @@ async function route(req: Request, res: Response, config: AppConfig, limiter?: R
     return handleInfo(req, res, config)
   if (pathname === `${API_PREFIX}/list`)
     return handleList(req, res, config, url.searchParams)
+  if (pathname === `${API_PREFIX}/media-info`)
+    return handleMediaInfo(req, res, config, url.searchParams, transcoder)
   if (pathname.startsWith(`${API_PREFIX}/`))
     throw new HttpError(404, 'Not found')
 
   if (pathname.startsWith(MEDIA_PREFIX))
     return handleMedia(req, res, config, decodePath(pathname.slice(MEDIA_PREFIX.length)), url.searchParams, limiter)
+  if (pathname.startsWith(HLS_PREFIX))
+    return handleHls(req, res, config, decodePath(pathname.slice(HLS_PREFIX.length)), limiter, transcoder)
 
   if (pathname === '/sw.js')
     return handleServiceWorker(req, res)
@@ -40,7 +46,7 @@ async function route(req: Request, res: Response, config: AppConfig, limiter?: R
   return handleIndex(req, res)
 }
 
-export function createHandler(config: AppConfig): RequestHandler {
+export function createHandler(config: AppConfig, transcoder?: Transcoder): RequestHandler {
   // 同一服务的所有连接共享一个限速器，限制的是总带宽
   const limiter = config.limitRate ? new RateLimiter(config.limitRate) : undefined
   return (req, res) => {
@@ -61,7 +67,7 @@ export function createHandler(config: AppConfig): RequestHandler {
       return
     }
 
-    route(req, res, config, limiter).catch((error: unknown) => {
+    route(req, res, config, limiter, transcoder).catch((error: unknown) => {
       if (error instanceof HttpError) {
         sendError(req, res, error.status, error.message)
         return

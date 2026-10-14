@@ -4,12 +4,16 @@ import type { AppConfig } from './config'
 import { createServer as createHttpServer } from 'node:http'
 import { createServer as createHttpsServer } from 'node:https'
 import { createHandler } from './handler'
+import { Transcoder } from './transcode'
 
-export function createServer(config: AppConfig): Server {
-  const handler = createHandler(config)
+/** 未传入 transcoder 时按配置创建；服务关闭时结束所有转码进程 */
+export function createServer(config: AppConfig, transcoder = config.transcode ? new Transcoder(config.transcode) : undefined): Server {
+  const handler = createHandler(config, transcoder)
   const server: Server = config.https
     ? createHttpsServer({ cert: config.https.cert, key: config.https.key }, handler)
     : createHttpServer(handler)
+  if (transcoder)
+    server.once('close', () => transcoder.close())
 
   // 大文件传输 / 慢速网络下不要过早断开连接
   server.requestTimeout = 0

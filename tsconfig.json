@@ -17,5 +17,7 @@
     "verbatimModuleSyntax": true,
     "skipLibCheck": true
   },
-  "include": ["src", "shared", "test", "tsup.config.ts", "vitest.config.ts"]
+  "include": ["src", "shared", "test", "tsup.config.ts", "vitest.config.ts"],
+  // 前端模块的测试由 web/tsconfig.json 检查（需要 DOM 类型与路径别名）
+  "exclude": ["test/web-*.test.ts"]
 }

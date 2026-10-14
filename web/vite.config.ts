@@ -22,6 +22,7 @@ export default defineConfig({
     proxy: {
       '/api': backend,
       '/media': backend,
+      '/hls': backend,
     },
   },
   build: {

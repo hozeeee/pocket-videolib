@@ -1,6 +1,7 @@
 import type { Credentials } from './utils/auth'
 import { existsSync, readFileSync, statSync } from 'node:fs'
-import { basename, resolve } from 'node:path'
+import { tmpdir } from 'node:os'
+import { basename, dirname, extname, join, resolve } from 'node:path'
 import process from 'node:process'
 import { parseCredentials } from './utils/auth'
 import { MIN_RATE, parseRate } from './utils/throttle'
@@ -18,9 +19,21 @@ export interface AppConfig {
   }
   /** 媒体文件传输的总上行限速（字节/秒），所有连接共享；未设置时不限速 */
   limitRate?: number
+  /** HLS 转码配置；未设置时不提供清晰度切换 */
+  transcode?: TranscodeConfig
   showHidden: boolean
   followSymlinks: boolean
   verbose: boolean
+}
+
+export interface TranscodeConfig {
+  /** ffmpeg / ffprobe 可执行文件，可以是 PATH 中的命令名 */
+  ffmpeg: string
+  ffprobe: string
+  /** 转码分片的磁盘缓存目录 */
+  cacheDir: string
+  /** 磁盘缓存上限（字节），超出后优先清理最久未使用的分片 */
+  cacheSize: number
 }
 
 export interface RawOptions {
@@ -31,6 +44,12 @@ export interface RawOptions {
   cert?: string
   key?: string
   limitRate?: string
+  /** `false` 表示关闭转码 */
+  transcode?: boolean
+  ffmpeg?: string
+  ffprobe?: string
+  transcodeCache?: string
+  transcodeCacheSize?: string
   showHidden?: boolean
   followSymlinks?: boolean
   verbose?: boolean
@@ -44,6 +63,7 @@ export class ConfigError extends Error {
 }
 
 export const DEFAULT_PORT = 8080
+export const DEFAULT_TRANSCODE_CACHE_SIZE = 10 * 1024 ** 3
 
 function parsePort(value: string | undefined): number {
   if (value === undefined)
@@ -71,6 +91,42 @@ function parseLimitRate(value: string | undefined): number | undefined {
   if (rate < MIN_RATE)
     throw new ConfigError(`Rate is too low: ${value} (minimum: 1K)`)
   return rate
+}
+
+const SIZE_UNITS: Record<string, number> = { '': 1, 'k': 1024, 'm': 1024 ** 2, 'g': 1024 ** 3, 't': 1024 ** 4 }
+
+/** 解析 `500M`、`10G`、`1.5TB` 等大小，按 1024 换算 */
+export function parseSize(value: string): number | undefined {
+  const match = /^(\d+(?:\.\d+)?)\s*([kmgt]?)(?:i?b)?$/i.exec(value.trim())
+  if (!match)
+    return undefined
+  return Math.floor(Number(match[1]) * SIZE_UNITS[match[2].toLowerCase()])
+}
+
+/** 未单独指定 ffprobe 时，使用与 ffmpeg 同目录的 ffprobe */
+function defaultFfprobe(ffmpeg: string): string {
+  if (!/[\\/]/.test(ffmpeg))
+    return 'ffprobe'
+  return join(dirname(ffmpeg), `ffprobe${extname(ffmpeg)}`)
+}
+
+function resolveTranscode(options: RawOptions): TranscodeConfig | undefined {
+  if (options.transcode === false)
+    return undefined
+  let cacheSize = DEFAULT_TRANSCODE_CACHE_SIZE
+  if (options.transcodeCacheSize !== undefined) {
+    const size = parseSize(options.transcodeCacheSize)
+    if (!size)
+      throw new ConfigError(`Invalid cache size: ${options.transcodeCacheSize} (examples: 500M, 10G)`)
+    cacheSize = size
+  }
+  const ffmpeg = options.ffmpeg || 'ffmpeg'
+  return {
+    ffmpeg,
+    ffprobe: options.ffprobe || defaultFfprobe(ffmpeg),
+    cacheDir: resolve(options.transcodeCache || join(tmpdir(), 'pocket-videolib', 'hls')),
+    cacheSize,
+  }
 }
 
 function resolveRoot(dir: string | undefined): string {
@@ -115,6 +171,7 @@ export function resolveConfig(options: RawOptions): AppConfig {
       ? { cert: readFileOption('cert', options.cert), key: readFileOption('key', options.key) }
       : undefined,
     limitRate: parseLimitRate(options.limitRate),
+    transcode: resolveTranscode(options),
     showHidden: options.showHidden ?? false,
     followSymlinks: options.followSymlinks ?? false,
     verbose: options.verbose ?? false,

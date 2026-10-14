@@ -4,6 +4,7 @@ import { computed } from 'vue'
 import AppIcon from '@/components/common/AppIcon.vue'
 import CacheProgressBar from '@/components/player/CacheProgressBar.vue'
 import { formatBytes, formatPercent, formatSpeed } from '@/utils/format'
+import { getQualityLabel, SOURCE_QUALITY } from '@/utils/quality'
 
 const props = defineProps<{
   task: DownloadTask
@@ -26,6 +27,9 @@ const STATUS_TEXT: Record<TaskStatus, string> = {
 
 const progress = computed(() => props.task.chunkCount > 0 ? props.task.cachedChunks / props.task.chunkCount : 1)
 const running = computed(() => props.task.status === 'downloading' || props.task.status === 'queued')
+const quality = computed(() => getQualityLabel(props.task.level ?? SOURCE_QUALITY))
+/** 转码后的大小在缓存完成前只是预估 */
+const approximate = computed(() => props.task.type === 'hls' && props.task.status !== 'done')
 </script>
 
 <template>
@@ -34,11 +38,11 @@ const running = computed(() => props.task.status === 'downloading' || props.task
       <AppIcon name="video" :size="20" class="icon" />
       <div class="info">
         <div class="name ellipsis" :title="task.path">
-          {{ task.name }}
+          <span class="quality">{{ quality }}</span>{{ task.name }}
         </div>
         <div class="meta muted">
           <span :class="`status--${task.status}`">{{ STATUS_TEXT[task.status] }}</span>
-          · {{ formatPercent(progress) }} · {{ formatBytes(progress * task.size) }} / {{ formatBytes(task.size) }}
+          · {{ formatPercent(progress) }} · {{ formatBytes(task.cachedBytes) }} / {{ approximate ? '约 ' : '' }}{{ formatBytes(task.size) }}
           <template v-if="task.status === 'downloading'">
             · {{ formatSpeed(task.speed) }}
           </template>
@@ -86,6 +90,15 @@ const running = computed(() => props.task.status === 'downloading' || props.task
 
 .name-link:hover .name {
   color: var(--primary-hover);
+}
+
+.quality {
+  margin-right: 6px;
+  padding: 0 5px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-muted);
+  font-size: 11px;
 }
 
 .meta {

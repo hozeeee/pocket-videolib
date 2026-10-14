@@ -22,6 +22,13 @@ Options:
       --cert <path>       TLS certificate file (enables HTTPS)
       --key <path>        TLS private key file (enables HTTPS)
       --limit-rate <rate> Cap total upload bandwidth, e.g. 2M (MiB/s), 500K, 20Mbps
+      --ffmpeg <path>     ffmpeg executable for HLS quality levels (default: ffmpeg in PATH)
+      --ffprobe <path>    ffprobe executable (default: next to ffmpeg)
+      --no-transcode      Disable HLS transcoding, always serve original files
+      --transcode-cache <dir>
+                          Directory for transcoded segments (default: system temp dir)
+      --transcode-cache-size <size>
+                          Max disk usage of transcoded segments (default: 10G)
       --show-hidden       Show hidden files (dot files)
       --follow-symlinks   Allow symlinks pointing outside the media directory
       --verbose           Print access logs
@@ -50,6 +57,11 @@ export function parseCli(argv: string[]): CliResult {
       'cert': { type: 'string' },
       'key': { type: 'string' },
       'limit-rate': { type: 'string' },
+      'ffmpeg': { type: 'string' },
+      'ffprobe': { type: 'string' },
+      'no-transcode': { type: 'boolean' },
+      'transcode-cache': { type: 'string' },
+      'transcode-cache-size': { type: 'string' },
       'show-hidden': { type: 'boolean' },
       'follow-symlinks': { type: 'boolean' },
       'verbose': { type: 'boolean' },
@@ -73,6 +85,11 @@ export function parseCli(argv: string[]): CliResult {
       cert: values.cert,
       key: values.key,
       limitRate: values['limit-rate'] ?? process.env.POCKET_VIDEOLIB_LIMIT_RATE,
+      transcode: values['no-transcode'] ? false : undefined,
+      ffmpeg: values.ffmpeg ?? process.env.POCKET_VIDEOLIB_FFMPEG,
+      ffprobe: values.ffprobe ?? process.env.POCKET_VIDEOLIB_FFPROBE,
+      transcodeCache: values['transcode-cache'],
+      transcodeCacheSize: values['transcode-cache-size'],
       showHidden: values['show-hidden'],
       followSymlinks: values['follow-symlinks'],
       verbose: values.verbose,

@@ -19,7 +19,7 @@ const usageRatio = computed(() => props.usage !== undefined && props.quota ? pro
   <div class="summary card">
     <div class="stat">
       <span class="value">{{ fileCount }}</span>
-      <span class="label muted">缓存文件</span>
+      <span class="label muted">缓存项（按清晰度）</span>
     </div>
     <div class="stat">
       <span class="value">{{ formatBytes(cachedBytes) }}</span>
@@ -36,7 +36,7 @@ const usageRatio = computed(() => props.usage !== undefined && props.quota ? pro
       缓存保存在当前浏览器的 IndexedDB 中，
       {{ streaming
         ? '已启用 Service Worker：播放时优先读取本地缓存，离线也能观看已缓存的部分。'
-        : '当前连接未启用 Service Worker（需 HTTPS 或 localhost），完整缓存后才会切换为本地播放。' }}
+        : '当前连接未启用 Service Worker（需 HTTPS 或 localhost）：转码清晰度仍会优先读取本地缓存，原画完整缓存后才会切换为本地播放。' }}
     </p>
   </div>
 </template>

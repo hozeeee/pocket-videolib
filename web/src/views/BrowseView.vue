@@ -10,7 +10,6 @@ import StatusMessage from '@/components/common/StatusMessage.vue'
 import { useDirectory } from '@/composables/useDirectory'
 import { useLocalStorage } from '@/composables/useLocalStorage'
 import { useServerInfo } from '@/composables/useServerInfo'
-import { getMediaKey } from '@/services/api'
 import { downloadManager } from '@/services/download-manager'
 
 const route = useRoute()
@@ -41,13 +40,17 @@ const entries = computed(() => {
   })
 })
 
+/** 同一文件可能缓存了多个清晰度，取进度最高的一个 */
 function getCacheProgress(entry: DirectoryEntry): number | undefined {
   if (entry.type !== 'file')
     return undefined
-  const task = downloadManager.tasks.get(getMediaKey(entry.path))
-  if (!task || task.chunkCount === 0 || (task.cachedChunks === 0 && task.status !== 'downloading'))
-    return undefined
-  return task.cachedChunks / task.chunkCount
+  let best: number | undefined
+  for (const task of downloadManager.getByPath(entry.path)) {
+    if (task.chunkCount === 0 || (task.cachedChunks === 0 && task.status !== 'downloading'))
+      continue
+    best = Math.max(best ?? 0, task.cachedChunks / task.chunkCount)
+  }
+  return best
 }
 </script>
 

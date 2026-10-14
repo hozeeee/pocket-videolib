@@ -19,6 +19,6 @@
     "verbatimModuleSyntax": true,
     "skipLibCheck": true
   },
-  "include": ["src/**/*.ts", "src/**/*.vue", "../shared/**/*.ts"],
+  "include": ["src/**/*.ts", "src/**/*.vue", "../shared/**/*.ts", "../test/web-*.test.ts"],
   "exclude": ["src/sw.ts"]
 }
