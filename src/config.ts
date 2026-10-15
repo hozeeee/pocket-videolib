@@ -19,6 +19,8 @@ export interface AppConfig {
   }
   /** 媒体文件传输的总上行限速（字节/秒），所有连接共享；未设置时不限速 */
   limitRate?: number
+  /** 启动时通过 Cloudflare 实测外网下载与上传速度 */
+  speedTest: boolean
   /** HLS 转码配置；未设置时不提供清晰度切换 */
   transcode?: TranscodeConfig
   showHidden: boolean
@@ -44,6 +46,8 @@ export interface RawOptions {
   cert?: string
   key?: string
   limitRate?: string
+  /** `false` 表示关闭启动测速 */
+  speedTest?: boolean
   /** `false` 表示关闭转码 */
   transcode?: boolean
   ffmpeg?: string
@@ -171,6 +175,7 @@ export function resolveConfig(options: RawOptions): AppConfig {
       ? { cert: readFileOption('cert', options.cert), key: readFileOption('key', options.key) }
       : undefined,
     limitRate: parseLimitRate(options.limitRate),
+    speedTest: options.speedTest ?? true,
     transcode: resolveTranscode(options),
     showHidden: options.showHidden ?? false,
     followSymlinks: options.followSymlinks ?? false,

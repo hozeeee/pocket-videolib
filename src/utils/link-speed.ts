@@ -14,8 +14,8 @@ export interface LinkSpeed {
 const execFileAsync = promisify(execFile)
 
 /** 外部命令可能不存在或卡住，超时后放弃，不影响启动 */
-async function run(file: string, args: string[]): Promise<string> {
-  const { stdout } = await execFileAsync(file, args, { timeout: 3000, windowsHide: true })
+async function run(file: string, args: string[], timeout = 3000): Promise<string> {
+  const { stdout } = await execFileAsync(file, args, { timeout, windowsHide: true })
   return stdout
 }
 
@@ -31,6 +31,32 @@ export function parseIfconfigMedia(output: string): number | undefined {
   if (!match)
     return undefined
   return Number(match[1]) * (match[2] ? 1000 : 1)
+}
+
+interface SystemProfilerWifi {
+  _name?: unknown
+  spairport_current_network_information?: {
+    spairport_network_rate?: unknown
+  }
+}
+
+/** 解析 macOS `system_profiler SPAirPortDataType -json` 的当前 Wi-Fi 发送速率 */
+export function parseSystemProfilerWifi(output: string): LinkSpeed[] {
+  try {
+    const root = JSON.parse(output) as { SPAirPortDataType?: Array<{ spairport_airport_interfaces?: SystemProfilerWifi[] }> }
+    const interfaces = root.SPAirPortDataType?.flatMap(item => item.spairport_airport_interfaces ?? []) ?? []
+    return interfaces.flatMap((item) => {
+      const name = typeof item._name === 'string' ? item._name : undefined
+      const rawRate = item.spairport_current_network_information?.spairport_network_rate
+      const mbps = typeof rawRate === 'number'
+        ? rawRate
+        : Number(String(rawRate ?? '').replace(/[^\d.]/g, ''))
+      return name && mbps > 0 ? [{ name, mbps, virtual: false }] : []
+    })
+  }
+  catch {
+    return []
+  }
 }
 
 /** 解析 PowerShell 输出的 `名称\t速率(bps)\t是否虚拟` 行 */
@@ -60,10 +86,20 @@ async function detectLinux(name: string): Promise<LinkSpeed | undefined> {
   return mbps ? { name, mbps, virtual } : undefined
 }
 
-async function detectDarwin(name: string): Promise<LinkSpeed | undefined> {
-  // 无线网卡的 media 行不含速率，只能识别有线网卡
-  const mbps = parseIfconfigMedia(await run('ifconfig', [name]))
-  return mbps ? { name, mbps, virtual: !/^en\d+$/.test(name) } : undefined
+async function detectDarwin(names: string[]): Promise<LinkSpeed[]> {
+  // ifconfig 可直接读取有线协商速率，但 Wi-Fi 的 media 行通常不含速率
+  const wiredResults = await Promise.all(names.map(async (name) => {
+    const mbps = parseIfconfigMedia(await run('ifconfig', [name]).catch(() => ''))
+    return mbps ? { name, mbps, virtual: !/^en\d+$/.test(name) } : undefined
+  }))
+  const wired = wiredResults.filter((item): item is LinkSpeed => item !== undefined)
+  const detectedNames = new Set(wired.map(item => item.name))
+
+  // macOS 10.15+ 支持 JSON 输出；相比已废弃的 airport 命令，对新系统更稳定
+  const profile = await run('system_profiler', ['SPAirPortDataType', '-json'], 5000).catch(() => '')
+  const wifi = parseSystemProfilerWifi(profile)
+    .filter(item => names.includes(item.name) && !detectedNames.has(item.name))
+  return [...wired, ...wifi]
 }
 
 const WINDOWS_SCRIPT = '[Console]::OutputEncoding = [Text.Encoding]::UTF8; '
@@ -84,9 +120,11 @@ export async function detectLinkSpeeds(names: string[], platform: NodeJS.Platfor
     if (platform === 'win32') {
       speeds = await detectWindows(names)
     }
-    else if (platform === 'linux' || platform === 'darwin') {
-      const detect = platform === 'linux' ? detectLinux : detectDarwin
-      const results = await Promise.all(names.map(name => detect(name).catch(() => undefined)))
+    else if (platform === 'darwin') {
+      speeds = await detectDarwin(names)
+    }
+    else if (platform === 'linux') {
+      const results = await Promise.all(names.map(name => detectLinux(name).catch(() => undefined)))
       speeds = results.filter((item): item is LinkSpeed => item !== undefined)
     }
   }

@@ -22,6 +22,7 @@ Options:
       --cert <path>       TLS certificate file (enables HTTPS)
       --key <path>        TLS private key file (enables HTTPS)
       --limit-rate <rate> Cap total upload bandwidth, e.g. 2M (MiB/s), 500K, 20Mbps
+      --no-speed-test     Skip internet download/upload speed test on startup
       --ffmpeg <path>     ffmpeg executable for HLS quality levels (default: ffmpeg in PATH)
       --ffprobe <path>    ffprobe executable (default: next to ffmpeg)
       --no-transcode      Disable HLS transcoding, always serve original files
@@ -57,6 +58,7 @@ export function parseCli(argv: string[]): CliResult {
       'cert': { type: 'string' },
       'key': { type: 'string' },
       'limit-rate': { type: 'string' },
+      'no-speed-test': { type: 'boolean' },
       'ffmpeg': { type: 'string' },
       'ffprobe': { type: 'string' },
       'no-transcode': { type: 'boolean' },
@@ -85,6 +87,7 @@ export function parseCli(argv: string[]): CliResult {
       cert: values.cert,
       key: values.key,
       limitRate: values['limit-rate'] ?? process.env.POCKET_VIDEOLIB_LIMIT_RATE,
+      speedTest: values['no-speed-test'] ? false : undefined,
       transcode: values['no-transcode'] ? false : undefined,
       ffmpeg: values.ffmpeg ?? process.env.POCKET_VIDEOLIB_FFMPEG,
       ffprobe: values.ffprobe ?? process.env.POCKET_VIDEOLIB_FFPROBE,

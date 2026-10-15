@@ -3,7 +3,7 @@ import { Readable } from 'node:stream'
 import { describe, expect, it } from 'vitest'
 import { parseCli } from '../src/cli'
 import { resolveConfig } from '../src/config'
-import { parseIfconfigMedia, parseIwBitrate, parseWindowsAdapters } from '../src/utils/link-speed'
+import { parseIfconfigMedia, parseIwBitrate, parseSystemProfilerWifi, parseWindowsAdapters } from '../src/utils/link-speed'
 import { formatBitrate, formatRate, parseRate, RateLimiter, ThrottleStream } from '../src/utils/throttle'
 
 describe('parseRate', () => {
@@ -92,6 +92,34 @@ describe('link speed parsers', () => {
     expect(parseIfconfigMedia('\tmedia: autoselect (1000baseT <full-duplex>)\n')).toBe(1000)
     expect(parseIfconfigMedia('\tmedia: autoselect (10GbaseT <full-duplex>)\n')).toBe(10_000)
     expect(parseIfconfigMedia('\tmedia: autoselect\n')).toBeUndefined()
+  })
+
+  it('parses macOS system profiler Wi-Fi rate', () => {
+    const output = JSON.stringify({
+      SPAirPortDataType: [{
+        spairport_airport_interfaces: [{
+          _name: 'en0',
+          spairport_current_network_information: {
+            _name: '<redacted>',
+            spairport_network_rate: 1200,
+          },
+        }],
+      }],
+    })
+    expect(parseSystemProfilerWifi(output)).toEqual([{ name: 'en0', mbps: 1200, virtual: false }])
+    expect(parseSystemProfilerWifi('{ invalid')).toEqual([])
+  })
+
+  it('accepts string Wi-Fi rates from system profiler', () => {
+    const output = JSON.stringify({
+      SPAirPortDataType: [{
+        spairport_airport_interfaces: [{
+          _name: 'en1',
+          spairport_current_network_information: { spairport_network_rate: '866.7 Mbps' },
+        }],
+      }],
+    })
+    expect(parseSystemProfilerWifi(output)).toEqual([{ name: 'en1', mbps: 866.7, virtual: false }])
   })
 
   it('parses windows adapters', () => {

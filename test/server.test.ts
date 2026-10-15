@@ -17,6 +17,7 @@ async function startServer(overrides: Partial<AppConfig> = {}) {
     root,
     port: 0,
     host: '127.0.0.1',
+    speedTest: false,
     showHidden: false,
     followSymlinks: false,
     verbose: false,
@@ -174,7 +175,7 @@ const hasIPv6Loopback = Object.values(networkInterfaces())
 
 describe.skipIf(!hasIPv6Loopback)('ipv6', () => {
   const config = (host?: string): AppConfig =>
-    ({ root, port: 0, host, showHidden: false, followSymlinks: false, verbose: false })
+    ({ root, port: 0, host, speedTest: false, showHidden: false, followSymlinks: false, verbose: false })
 
   it('serves over an IPv6 address', async () => {
     const server = createServer(config('::1'))

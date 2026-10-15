@@ -1,4 +1,5 @@
 import type { LinkSpeed } from './utils/link-speed'
+import type { InternetSpeed } from './utils/speed-test'
 import process from 'node:process'
 import { HELP_TEXT, parseCli } from './cli'
 import { ConfigError, resolveConfig } from './config'
@@ -7,22 +8,37 @@ import { Transcoder } from './transcode'
 import { detectLinkSpeeds } from './utils/link-speed'
 import { color, logger } from './utils/logger'
 import { getAccessUrls, getLanInterfaceNames } from './utils/network'
+import { measureInternetSpeed } from './utils/speed-test'
 import { formatBitrate, formatRate } from './utils/throttle'
 import { APP_NAME, APP_VERSION } from './version'
 
-function printBandwidth(limitRate: number | undefined, speeds: LinkSpeed[]): void {
-  const network = speeds.length > 0
+function printBandwidth(limitRate: number | undefined, speeds: LinkSpeed[], internet: InternetSpeed | undefined, speedTestEnabled: boolean): void {
+  const link = speeds.length > 0
     ? speeds.map(item => `${item.name} ${formatBitrate(item.mbps * 1e6)}`).join(', ')
-    : color.dim('link speed unavailable')
-  console.log(`  ${color.dim('Network:')} ${network}`)
+    : color.dim('无法获取')
+  console.log(`  ${color.dim('网卡链路:')} ${link} ${color.dim('（本机到路由器的协商速率）')}`)
+
+  if (!speedTestEnabled) {
+    console.log(`  ${color.dim('外网实测:')} ${color.dim('已关闭（移除 --no-speed-test 可开启）')}`)
+  }
+  else if (internet) {
+    const download = internet.downloadBitsPerSecond ? formatBitrate(internet.downloadBitsPerSecond) : '测量失败'
+    const upload = internet.uploadBitsPerSecond ? formatBitrate(internet.uploadBitsPerSecond) : '测量失败'
+    console.log(`  ${color.dim('外网实测:')} 下载 ${color.green(download)} / 上传 ${color.green(upload)} ${color.dim('（Cloudflare，当前实际吞吐率）')}`)
+  }
+  else {
+    console.log(`  ${color.dim('外网实测:')} ${color.yellow('测速失败')} ${color.dim('（请检查外网连接或使用 --no-speed-test 关闭）')}`)
+  }
 
   if (!limitRate) {
-    console.log(`  ${color.dim('Limit:  ')} unlimited ${color.dim('(use --limit-rate to cap upload bandwidth)')}`)
+    console.log(`  ${color.dim('上行限速:')} 不限速 ${color.dim('（可用 --limit-rate 设置）')}`)
     return
   }
-  const maxMbps = Math.max(0, ...speeds.map(item => item.mbps))
-  const exceeds = maxMbps > 0 && limitRate * 8 >= maxMbps * 1e6
-  console.log(`  ${color.dim('Limit:  ')} ${formatRate(limitRate)}${exceeds ? color.yellow(' ≥ link speed, has no effect') : ''}`)
+  const measuredUpload = internet?.uploadBitsPerSecond
+  const maxLink = Math.max(0, ...speeds.map(item => item.mbps)) * 1e6
+  const reference = measuredUpload ?? maxLink
+  const exceeds = reference > 0 && limitRate * 8 >= reference
+  console.log(`  ${color.dim('上行限速:')} ${formatRate(limitRate)}${exceeds ? color.yellow('（不低于可用上行，可能不会生效）') : ''}`)
 }
 
 async function printTranscode(transcoder: Transcoder | undefined): Promise<void> {
@@ -54,8 +70,9 @@ async function main(): Promise<void> {
 
   const transcoder = config.transcode ? new Transcoder(config.transcode) : undefined
   const server = createServer(config, transcoder)
-  // 与启动监听并行，尽量不拖慢启动
+  // 网卡检测、外网测速与启动监听并行；测速失败不影响服务启动
   const linkSpeeds = detectLinkSpeeds(getLanInterfaceNames())
+  const internetSpeed = config.speedTest ? measureInternetSpeed() : Promise.resolve(undefined)
   void transcoder?.getStatus()
   const { address, port } = await listen(server, config.port, config.host)
 
@@ -66,7 +83,8 @@ async function main(): Promise<void> {
   console.log(`  ${color.dim('Serving:')} ${config.root}`)
   for (const url of urls)
     console.log(`  ${color.dim('Open:   ')} ${color.green(url)}`)
-  printBandwidth(config.limitRate, await linkSpeeds)
+  const [links, internet] = await Promise.all([linkSpeeds, internetSpeed])
+  printBandwidth(config.limitRate, links, internet, config.speedTest)
   await printTranscode(transcoder)
   if (config.auth)
     console.log(`  ${color.dim('Auth:   ')} enabled (user: ${config.auth.username})`)

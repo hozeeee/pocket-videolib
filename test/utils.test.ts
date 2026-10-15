@@ -20,9 +20,12 @@ describe('parseCli', () => {
     expect(parseCli(['a', '--dir', 'b'])).toMatchObject({ options: { dir: 'b' } })
   })
 
-  it('handles help and version', () => {
+  it('handles help, version and speed-test opt-out', () => {
     expect(parseCli(['-h'])).toEqual({ type: 'help' })
     expect(parseCli(['--version'])).toEqual({ type: 'version' })
+    expect(parseCli(['--no-speed-test'])).toMatchObject({ options: { speedTest: false } })
+    expect(resolveConfig({}).speedTest).toBe(true)
+    expect(resolveConfig({ speedTest: false }).speedTest).toBe(false)
   })
 
   it('throws on unknown options', () => {

@@ -103,9 +103,10 @@ pocket-videolib ~/Videos --auth admin:secret
   Open:    http://localhost:8080
   Open:    http://192.168.1.10:8080
   Open:    http://[240e:3b7::1]:8080
-  Network: eth0 1 Gbps
-  Limit:   unlimited (use --limit-rate to cap upload bandwidth)
-  Quality: original + up to 1080p HLS (ffmpeg 7.1)
+  网卡链路: eth0 1 Gbps（本机到路由器的协商速率）
+  外网实测: 下载 286 Mbps / 上传 42 Mbps（Cloudflare，当前实际吞吐率）
+  上行限速: 不限速（可用 --limit-rate 设置）
+  Quality:  original + up to 1080p HLS (ffmpeg 7.1)
 ```
 
 在同一局域网的设备上用浏览器打开对应地址即可。按 `Ctrl + C` 停止服务。
@@ -126,11 +127,19 @@ pocket-videolib ~/Videos --limit-rate 2M       # 字节，即 2 MiB/s，按 1024
 | `800kbps` / `20Mbps` / `1Gbps` | 比特每秒（也可写 `mbit`） |
 | `0`                            | 不限速                    |
 
-启动时会打印网卡的协商速率（`Network`）和当前限速（`Limit`），限速不低于网卡速率时会提示限速无效。注意：
+启动时会同时显示：
 
-- 网卡速率是本机到路由器 / 交换机的链路上限，**不是**运营商分配的外网上行带宽；从外网访问时请参考宽带套餐设置限速
-- Linux 读取 `/sys/class/net`（无线网卡通过 `iw`），macOS 读取 `ifconfig`（仅有线网卡），Windows 读取 `Get-NetAdapter`；无法获取时显示 `link speed unavailable`
-- 限速仅作用于 `/media` 文件传输与 `/hls` 转码分片，目录列表、页面等小响应不受影响
+- **网卡链路**：本机到路由器 / 交换机的协商速率。Linux 读取 `/sys/class/net`（无线网卡通过 `iw`），macOS 有线网卡读取 `ifconfig`、Wi-Fi 读取 `system_profiler`，Windows 读取 `Get-NetAdapter`
+- **外网实测**：通过 Cloudflare 边缘节点实际下载和上传数据，反映当前运营商线路的真实吞吐率。先用小数据包预热，再自适应选择约 2 秒的测量数据量，单次启动最多下载约 25.5 MiB、上传约 10.25 MiB，总超时 25 秒
+- **上行限速**：`--limit-rate` 设置的所有媒体连接共享上限；不低于实测外网上行时会提示可能不会生效
+
+测速会将本机公网 IP 提供给 Cloudflare，并产生最多约 36 MiB 流量；Cloudflare 可能根据 IP 估算地区和运营商 ASN。离线或测速服务不可达不会影响媒体服务启动，只会显示“测速失败”。不希望启动时测速时可使用：
+
+```bash
+pocket-videolib ~/Videos --no-speed-test
+```
+
+限速仅作用于 `/media` 文件传输与 `/hls` 转码分片，目录列表、页面等小响应不受影响。
 
 ### 清晰度与转码
 
@@ -225,6 +234,7 @@ pocket-videolib [dir] [options]
 | `--cert <path>`                 |      | TLS 证书文件，需与 `--key` 同时使用                 | -                                      |
 | `--key <path>`                  |      | TLS 私钥文件，需与 `--cert` 同时使用                | -                                      |
 | `--limit-rate <rate>`           |      | 限制总上行带宽，见 [限制上行带宽](#限制上行带宽)    | 不限速                                 |
+| `--no-speed-test`               |      | 关闭启动时的 Cloudflare 外网下载/上传测速           | 默认测速                               |
 | `--ffmpeg <path>`               |      | ffmpeg 可执行文件，见 [清晰度与转码](#清晰度与转码) | `PATH` 中的 `ffmpeg`                   |
 | `--ffprobe <path>`              |      | ffprobe 可执行文件                                  | 与 ffmpeg 同目录                       |
 | `--no-transcode`                |      | 关闭转码，只提供原画                                | 有 ffmpeg 时开启                       |
