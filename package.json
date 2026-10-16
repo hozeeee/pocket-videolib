@@ -1,7 +1,7 @@
 {
   "name": "pocket-videolib",
   "type": "module",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A zero-dependency, single-file local media library server. Browse and stream your local videos from any device, with client-side chunk caching.",
   "license": "MIT",
   "repository": {
